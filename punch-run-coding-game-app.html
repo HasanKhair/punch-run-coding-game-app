@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PUNCH RUN</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #171310;
+    --bg-raise: #201a15;
+    --panel: #ebe2cd;
+    --panel-dark: #d9cca4;
+    --panel-line: #b9a978;
+    --ink: #241c12;
+    --ink-soft: #5a4f3a;
+    --amber: #ffb200;
+    --amber-dim: #b9800a;
+    --teal: #3e8989;
+    --teal-dim: #234d4d;
+    --danger: #d6524a;
+    --success: #8fbf5c;
+    --text-light: #f4eedd;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at 50% -10%, #2a2118 0%, var(--bg) 55%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+    color:var(--text-light);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:28px 16px 60px;
+  }
+  .wrap{width:100%;max-width:980px;}
+  header{
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom:1px solid #3a3025; padding-bottom:14px; margin-bottom:20px;
+    flex-wrap:wrap; gap:10px;
+  }
+  .title{
+    font-family:'IBM Plex Mono', monospace; font-weight:700;
+    font-size:28px; letter-spacing:2px; color:var(--amber);
+    text-shadow:0 0 18px rgba(255,178,0,0.35);
+    margin:0;
+  }
+  .title span{color:var(--text-light); text-shadow:none; font-weight:500; font-size:14px; letter-spacing:1px; display:block; margin-top:2px; opacity:0.6;}
+  .level-dots{display:flex; gap:7px; align-items:center;}
+  .dot{
+    width:11px;height:11px;border-radius:50%;
+    border:1px solid var(--ink-soft); background:transparent; cursor:pointer;
+    transition:transform .15s;
+  }
+  .dot.done{background:var(--success); border-color:var(--success);}
+  .dot.current{background:var(--amber); border-color:var(--amber); transform:scale(1.3);}
+  .dot.locked{cursor:not-allowed; opacity:.4;}
+
+  .levelbar{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px; flex-wrap:wrap; gap:8px;}
+  .levelbar h2{font-family:'IBM Plex Mono',monospace; font-size:17px; margin:0; color:var(--text-light); letter-spacing:.5px;}
+  .levelbar h2 .n{color:var(--amber-dim);}
+  .hint{font-size:13px; color:#a89a78; font-style:italic;}
+
+  main{display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap;}
+
+  /* ---------- STAGE ---------- */
+  .stage-col{flex:1 1 420px; min-width:300px;}
+  .stage{
+    position:relative;
+    background:
+      linear-gradient(rgba(62,137,137,0.10) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(62,137,137,0.10) 1px, transparent 1px),
+      #100d0a;
+    border:1px solid #3a3025;
+    border-radius:6px;
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,178,0,0.05);
+    margin:0 auto;
+    overflow:hidden;
+  }
+  .cell{position:absolute; border:1px solid rgba(62,137,137,0.12);}
+  .cell.wall{background:repeating-linear-gradient(45deg, #2a2116 0 6px, #221b12 6px 12px); border-color:#4a3c26;}
+  .cell.hazard::after{
+    content:"";position:absolute; inset:20%; background:var(--danger);
+    clip-path:polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    opacity:.85; filter:drop-shadow(0 0 6px rgba(214,82,74,0.8));
+  }
+  .cell.goal{background:radial-gradient(circle, rgba(255,178,0,0.18) 0%, transparent 70%);}
+  .cell.goal::after{
+    content:""; position:absolute; inset:28%; border-radius:50%;
+    border:2px solid var(--amber); box-shadow:0 0 12px rgba(255,178,0,0.7), inset 0 0 8px rgba(255,178,0,0.5);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  .cell.start::after{content:"";position:absolute; inset:38%; background:var(--teal); border-radius:2px; opacity:.5;}
+  @keyframes pulse{0%,100%{opacity:.6; transform:scale(0.9);} 50%{opacity:1; transform:scale(1.05);}}
+
+  .robot{
+    position:absolute; width:var(--cell); height:var(--cell);
+    transition: left .32s cubic-bezier(.4,0,.2,1), top .32s cubic-bezier(.4,0,.2,1), transform .22s;
+    display:flex; align-items:center; justify-content:center; z-index:5;
+  }
+  .robot svg{width:62%; height:62%; filter:drop-shadow(0 0 8px rgba(255,178,0,0.7));}
+  .robot.crash{animation:shake .4s;}
+  @keyframes shake{
+    0%,100%{transform:translateX(0) rotate(var(--rot,0deg));}
+    20%{transform:translateX(-4px) rotate(var(--rot,0deg));}
+    40%{transform:translateX(4px) rotate(var(--rot,0deg));}
+    60%{transform:translateX(-3px) rotate(var(--rot,0deg));}
+    80%{transform:translateX(3px) rotate(var(--rot,0deg));}
+  }
+
+  .overlay{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(10,8,6,0.72); backdrop-filter:blur(1px); z-index:10; flex-direction:column; gap:12px;
+  }
+  .overlay.show{display:flex;}
+  .overlay .msg{font-family:'IBM Plex Mono',monospace; font-size:19px; letter-spacing:1px; text-align:center; padding:0 20px;}
+  .overlay.success .msg{color:var(--success);}
+  .overlay.fail .msg{color:var(--danger);}
+  .overlay button{
+    font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:1px;
+    background:var(--amber); color:#241c12; border:none; padding:9px 18px; border-radius:3px;
+    cursor:pointer; font-weight:600;
+  }
+  .overlay button:hover{background:#ffc63d;}
+
+  .status-line{
+    display:flex; justify-content:space-between; margin-top:10px; font-family:'IBM Plex Mono',monospace;
+    font-size:12px; color:#a89a78; letter-spacing:.5px;
+  }
+
+  /* ---------- DECK ---------- */
+  .deck{
+    flex:1 1 320px; min-width:280px;
+    background:var(--panel); color:var(--ink);
+    border-radius:8px; padding:16px 16px 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45), 0 0 0 1px var(--panel-dark);
+    position:relative;
+  }
+  .deck::before{
+    content:"PROGRAM DECK";
+    position:absolute; top:-9px; left:14px; background:var(--amber); color:#241c12;
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:1.5px;
+    padding:3px 8px; border-radius:2px; font-weight:700;
+  }
+  .palette{display:flex; gap:6px; flex-wrap:wrap; margin:14px 0 12px;}
+  .pal-btn{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.3px;
+    border:1px solid var(--panel-line); background:#f6efdc; color:var(--ink);
+    padding:8px 10px; border-radius:4px; cursor:pointer; transition:.12s;
+  }
+  .pal-btn:hover{background:var(--amber); border-color:var(--amber-dim); transform:translateY(-1px);}
+  .pal-btn.rep{background:var(--teal); color:#eafafa; border-color:var(--teal-dim);}
+  .pal-btn.rep:hover{background:#4ea3a3;}
+
+  .target-row{display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; font-family:'IBM Plex Mono',monospace;}
+  .target-row select{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; padding:4px 6px; border-radius:3px;
+    border:1px solid var(--panel-line); background:#fff; color:var(--ink);
+  }
+
+  .budget{
+    display:flex; justify-content:space-between; align-items:center; font-family:'IBM Plex Mono',monospace;
+    font-size:12px; margin-bottom:10px; padding:6px 9px; border-radius:4px; background:#f6efdc; border:1px solid var(--panel-line);
+  }
+  .budget.over{background:#f6d9d6; border-color:var(--danger); color:#7a1f1a;}
+  .budget b{font-size:13px;}
+
+  .program{
+    min-height:90px; max-height:280px; overflow-y:auto;
+    border:1.5px dashed var(--panel-line); border-radius:5px; padding:8px; margin-bottom:12px;
+    background:repeating-linear-gradient(#f2ead2, #f2ead2 27px, #e9dfc2 28px);
+  }
+  .program:empty::after{content:"click a card below to add it here"; font-size:12px; color:var(--ink-soft); font-style:italic;}
+  .card{
+    position:relative; background:var(--text-light); border:1px solid var(--panel-line);
+    border-radius:3px 3px 3px 3px; margin-bottom:5px; padding:6px 8px 6px 20px;
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600; color:var(--ink);
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
+    transition:box-shadow .15s, background .15s;
+  }
+  .card::before{
+    content:""; position:absolute; left:6px; top:50%; width:6px; height:6px; border-radius:50%;
+    background:var(--bg); transform:translateY(-50%); box-shadow:0 0 0 1px var(--panel-line);
+  }
+  .card.running{background:#fff3cf; box-shadow:0 0 0 2px var(--amber), 0 0 10px rgba(255,178,0,0.6);}
+  .card .lbl{display:flex; align-items:center; gap:6px;}
+  .card .rm{background:none; border:none; color:var(--danger); cursor:pointer; font-size:14px; font-weight:700; padding:0 3px;}
+  .card.repeat{background:#e4f2f2; flex-direction:column; align-items:stretch; padding:6px 8px 8px 20px;}
+  .card.repeat > .rhead{display:flex; justify-content:space-between; align-items:center;}
+  .card.repeat .count-input{
+    width:34px; font-family:'IBM Plex Mono',monospace; font-weight:700; text-align:center;
+    border:1px solid var(--teal-dim); border-radius:3px; font-size:12px; padding:1px 2px;
+  }
+  .card.repeat .kids{margin-top:6px; padding-left:10px; border-left:2px solid var(--teal); min-height:6px;}
+  .card.repeat .kids:empty::after{content:"(empty — select this repeat above, then add cards)"; font-size:10.5px; color:var(--ink-soft); font-style:italic;}
+
+  .deck-actions{display:flex; gap:8px; margin-top:6px;}
+  .btn-main{
+    flex:1; font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:13px; letter-spacing:.5px;
+    padding:10px; border-radius:5px; border:none; cursor:pointer; transition:.12s;
+  }
+  .btn-run{background:var(--amber); color:#241c12;}
+  .btn-run:hover:not(:disabled){background:#ffc63d;}
+  .btn-run:disabled{background:#cbbf9c; color:#7d7256; cursor:not-allowed;}
+  .btn-reset{background:transparent; border:1px solid var(--ink-soft); color:var(--ink); flex:0 0 auto; padding:10px 12px;}
+  .btn-reset:hover{background:#ddd0ac;}
+
+  .hint-toggle{font-size:11px; color:var(--ink-soft); text-decoration:underline; cursor:pointer; margin-top:8px; display:inline-block;}
+  .footer-note{text-align:center; font-size:11px; color:#6a5f48; margin-top:26px; letter-spacing:.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="title">PUNCH&nbsp;RUN<span>a card-programming puzzle</span></p>
+    </div>
+    <div class="level-dots" id="dots"></div>
+  </header>
+
+  <div class="levelbar">
+    <h2><span class="n" id="lvlNum"></span> <span id="lvlName"></span></h2>
+    <div class="hint" id="lvlHint"></div>
+  </div>
+
+  <main>
+    <div class="stage-col">
+      <div class="stage" id="stage">
+        <div class="overlay" id="overlay">
+          <div class="msg" id="overlayMsg"></div>
+          <button id="overlayBtn"></button>
+        </div>
+      </div>
+      <div class="status-line">
+        <span id="stepCount">STEPS: 0</span>
+        <span id="posReadout">POS —</span>
+      </div>
+    </div>
+
+    <div class="deck">
+      <div class="target-row">
+        <span>ADDING TO:</span>
+        <select id="targetSel"></select>
+      </div>
+      <div class="palette">
+        <button class="pal-btn" data-t="FWD">▲ FORWARD</button>
+        <button class="pal-btn" data-t="LEFT">↺ TURN LEFT</button>
+        <button class="pal-btn" data-t="RIGHT">↻ TURN RIGHT</button>
+        <button class="pal-btn rep" data-t="REPEAT">⟲ REPEAT</button>
+      </div>
+      <div class="budget" id="budget"></div>
+      <div class="program" id="program"></div>
+      <div class="deck-actions">
+        <button class="btn-main btn-run" id="runBtn">▶ RUN PROGRAM</button>
+        <button class="btn-main btn-reset" id="clearBtn">CLEAR</button>
+      </div>
+      <a class="hint-toggle" id="hintToggle">need a hint?</a>
+    </div>
+  </main>
+  <div class="footer-note">PROGRESS SAVES AUTOMATICALLY · BUILT ON PUNCH CARDS &amp; VIBES</div>
+</div>
+
+<script>
+const DIRV = [ [1,0], [0,1], [-1,0], [0,-1] ]; // E, S, W, N
+const DIRDEG = [0,90,180,270];
+
+const LEVELS = [
+  { name:"Power On", w:6,h:3, start:{x:0,y:1,dir:0}, goal:{x:5,y:1}, walls:[], hazards:[], budget:6,
+    hint:"Chain FORWARD cards one after another to reach the socket." },
+  { name:"Turn Signal", w:4,h:4, start:{x:0,y:0,dir:0}, goal:{x:2,y:2}, walls:[], hazards:[], budget:6,
+    hint:"Move east, then use TURN RIGHT to face south before continuing." },
+  { name:"Long Haul", w:9,h:1, start:{x:0,y:0,dir:0}, goal:{x:8,y:0}, walls:[], hazards:[], budget:3,
+    hint:"8 forward moves won't fit in 3 cards. Put FORWARD inside a REPEAT." },
+  { name:"Square Dance", w:3,h:3, start:{x:0,y:0,dir:0}, goal:{x:0,y:2}, walls:[], hazards:[], budget:4,
+    hint:"A REPEAT can hold more than one card. Try repeating [FORWARD, FORWARD, TURN RIGHT]." },
+  { name:"Mind the Gap", w:6,h:4, start:{x:0,y:0,dir:0}, goal:{x:5,y:3}, walls:[], hazards:[{x:1,y:2},{x:2,y:3},{x:4,y:0}], budget:5,
+    hint:"Sparking cells crash your run. Go forward, turn, then repeat forward again." },
+  { name:"The Vault", w:7,h:7, start:{x:0,y:0,dir:0}, goal:{x:6,y:6}, walls:[
+      {x:2,y:2},{x:2,y:3},{x:2,y:4},{x:4,y:2},{x:4,y:3},{x:4,y:4}
+    ], hazards:[{x:3,y:3},{x:1,y:5},{x:5,y:1}], budget:5,
+    hint:"Hug the top row, turn once, then repeat down the right column." },
+];
+
+let progress = { unlocked: 1, scores: {} };
+let curLevelIdx = 0;
+let program = [];
+let idCounter = 1;
+let activeTargetId = "main";
+let robotState = null;
+let running = false;
+
+const $ = sel => document.querySelector(sel);
+const stage = $("#stage");
+const overlay = $("#overlay");
+const overlayMsg = $("#overlayMsg");
+const overlayBtn = $("#overlayBtn");
+const programEl = $("#program");
+const targetSel = $("#targetSel");
+const budgetEl = $("#budget");
+const runBtn = $("#runBtn");
+
+function newId(){ return "c" + (idCounter++); }
+
+function findContainer(id, list=program){
+  if(id === "main") return program;
+  for(const c of list){
+    if(c.type==="REPEAT"){
+      if(c.id===id) return c.children;
+      const found = findContainer(id, c.children);
+      if(found) return found;
+    }
+  }
+  return null;
+}
+function removeCard(id, list=program){
+  const idx = list.findIndex(c=>c.id===id);
+  if(idx>-1){ list.splice(idx,1); return true; }
+  for(const c of list){
+    if(c.type==="REPEAT" && removeCard(id, c.children)) return true;
+  }
+  return false;
+}
+function countCards(list){
+  let n=0;
+  for(const c of list){
+    n += 1;
+    if(c.type==="REPEAT") n += countCards(c.children);
+  }
+  return n;
+}
+function collectRepeats(list, out){
+  for(const c of list){
+    if(c.type==="REPEAT"){ out.push(c); collectRepeats(c.children, out); }
+  }
+  return out;
+}
+
+function cardLabel(t){
+  return {FWD:"▲ FORWARD", LEFT:"↺ TURN LEFT", RIGHT:"↻ TURN RIGHT"}[t] || t;
+}
+
+function renderProgram(){
+  programEl.innerHTML = "";
+  const build = (list) => {
+    const frag = document.createDocumentFragment();
+    list.forEach(c=>{
+      const el = document.createElement("div");
+      el.dataset.id = c.id;
+      if(c.type==="REPEAT"){
+        el.className = "card repeat";
+        el.innerHTML = `<div class="rhead"><span class="lbl">⟲ REPEAT ×
+          <input type="number" min="1" max="20" class="count-input" value="${c.count}"></span>
+          <button class="rm" title="remove">×</button></div>
+          <div class="kids"></div>`;
+        el.querySelector(".count-input").addEventListener("change", e=>{
+          let v = parseInt(e.target.value)||1;
+          v = Math.max(1, Math.min(20, v));
+          c.count = v; e.target.value = v;
+          renderBudget();
+        });
+        el.querySelector(".rm").addEventListener("click", ()=>{
+          removeCard(c.id); if(activeTargetId===c.id) activeTargetId="main";
+          renderProgram(); renderBudget(); renderTargetOptions();
+        });
+        el.querySelector(".kids").appendChild(build(c.children));
+      } else {
+        el.className = "card";
+        el.innerHTML = `<span class="lbl">${cardLabel(c.type)}</span><button class="rm" title="remove">×</button>`;
+        el.querySelector(".rm").addEventListener("click", ()=>{
+          removeCard(c.id); renderProgram(); renderBudget();
+        });
+      }
+      frag.appendChild(el);
+    });
+    return frag;
+  };
+  programEl.appendChild(build(program));
+}
+
+function renderTargetOptions(){
+  const repeats = collectRepeats(program, []);
+  const cur = activeTargetId;
+  targetSel.innerHTML = `<option value="main">Main Program</option>` +
+    repeats.map((r,i)=>`<option value="${r.id}">Repeat block #${i+1}</option>`).join("");
+  if([...targetSel.options].some(o=>o.value===cur)) targetSel.value = cur;
+  else { activeTargetId="main"; targetSel.value="main"; }
+}
+
+function renderBudget(){
+  const n = countCards(program);
+  const lvl = LEVELS[curLevelIdx];
+  budgetEl.classList.toggle("over", n > lvl.budget);
+  budgetEl.innerHTML = `<span>PUNCH BUDGET</span><b>${n} / ${lvl.budget}</b>`;
+  runBtn.disabled = n===0 || n>lvl.budget;
+}
+
+$(".palette").addEventListener("click", e=>{
+  const btn = e.target.closest(".pal-btn");
+  if(!btn || running) return;
+  const t = btn.dataset.t;
+  const container = findContainer(activeTargetId) || program;
+  if(t==="REPEAT"){
+    container.push({id:newId(), type:"REPEAT", count:2, children:[]});
+  } else {
+    container.push({id:newId(), type:t});
+  }
+  renderProgram(); renderBudget(); renderTargetOptions();
+});
+targetSel.addEventListener("change", e=> activeTargetId = e.target.value );
+$("#clearBtn").addEventListener("click", ()=>{
+  if(running) return;
+  program = []; activeTargetId="main";
+  renderProgram(); renderBudget(); renderTargetOptions();
+});
+
+// ---------- STAGE / LEVEL RENDERING ----------
+let CELL = 56;
+function cellKey(x,y){ return x+","+y; }
+
+function loadLevel(idx){
+  curLevelIdx = idx;
+  const lvl = LEVELS[idx];
+  program = []; activeTargetId = "main"; idCounter=1;
+  renderProgram(); renderTargetOptions();
+
+  $("#lvlNum").textContent = "LEVEL " + (idx+1);
+  $("#lvlName").textContent = lvl.name;
+  $("#lvlHint").textContent = "";
+  $("#hintToggle").dataset.shown = "0";
+  $("#hintToggle").textContent = "need a hint?";
+
+  const maxDim = Math.max(lvl.w, lvl.h);
+  CELL = Math.max(34, Math.min(56, Math.floor(420/maxDim)));
+  stage.style.setProperty("--cell", CELL+"px");
+  stage.style.width = (lvl.w*CELL)+"px";
+  stage.style.height = (lvl.h*CELL)+"px";
+
+  stage.querySelectorAll(".cell,.robot").forEach(el=>el.remove());
+
+  const wallSet = new Set(lvl.walls.map(p=>cellKey(p.x,p.y)));
+  const hazSet = new Set(lvl.hazards.map(p=>cellKey(p.x,p.y)));
+
+  for(let y=0;y<lvl.h;y++){
+    for(let x=0;x<lvl.w;x++){
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.style.left = (x*CELL)+"px";
+      cell.style.top = (y*CELL)+"px";
+      cell.style.width = CELL+"px";
+      cell.style.height = CELL+"px";
+      if(wallSet.has(cellKey(x,y))) cell.classList.add("wall");
+      if(hazSet.has(cellKey(x,y))) cell.classList.add("hazard");
+      if(x===lvl.goal.x && y===lvl.goal.y) cell.classList.add("goal");
+      if(x===lvl.start.x && y===lvl.start.y) cell.classList.add("start");
+      stage.appendChild(cell);
+    }
+  }
+  const robot = document.createElement("div");
+  robot.className = "robot"; robot.id = "robot";
+  robot.innerHTML = `<svg viewBox="0 0 24 24"><polygon points="2,4 22,12 2,20 7,12" fill="var(--amber)" stroke="#241c12" stroke-width="1"/></svg>`;
+  stage.appendChild(robot);
+
+  robotState = {x:lvl.start.x, y:lvl.start.y, dir:lvl.start.dir};
+  placeRobot(true);
+  renderBudget();
+  updateDots();
+  hideOverlay();
+  updateStatus(0);
+}
+
+function placeRobot(instant){
+  const robot = $("#robot");
+  if(instant) robot.style.transition = "none";
+  robot.style.left = (robotState.x*CELL)+"px";
+  robot.style.top = (robotState.y*CELL)+"px";
+  robot.style.setProperty("--rot", DIRDEG[robotState.dir]+"deg");
+  robot.style.transform = `rotate(${DIRDEG[robotState.dir]}deg)`;
+  if(instant){ requestAnimationFrame(()=>{ robot.style.transition = ""; }); }
+}
+
+function updateStatus(steps){
+  $("#stepCount").textContent = "STEPS: " + steps;
+  $("#posReadout").textContent = `POS (${robotState.x},${robotState.y}) · ${["E","S","W","N"][robotState.dir]}`;
+}
+
+function showOverlay(kind, msg, btnLabel, onClick){
+  overlay.className = "overlay show " + kind;
+  overlayMsg.textContent = msg;
+  overlayBtn.textContent = btnLabel;
+  overlayBtn.onclick = onClick;
+}
+function hideOverlay(){ overlay.className = "overlay"; }
+
+function updateDots(){
+  const dotsEl = $("#dots");
+  dotsEl.innerHTML = "";
+  LEVELS.forEach((lvl,i)=>{
+    const d = document.createElement("div");
+    const locked = (i+1) > progress.unlocked;
+    d.className = "dot" + (i===curLevelIdx?" current":"") + (progress.scores[i]!==undefined?" done":"") + (locked?" locked":"");
+    d.title = lvl.name + (locked?" (locked)":"");
+    if(!locked) d.addEventListener("click", ()=> loadLevel(i));
+    dotsEl.appendChild(d);
+  });
+}
+
+$("#hintToggle").addEventListener("click", ()=>{
+  const el = $("#hintToggle");
+  const shown = el.dataset.shown === "1";
+  el.dataset.shown = shown ? "0" : "1";
+  el.textContent = shown ? "need a hint?" : "hide hint";
+  $("#lvlHint").textContent = shown ? "" : LEVELS[curLevelIdx].hint;
+});
+
+// ---------- EXECUTION ----------
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function runProgram(){
+  if(running) return;
+  const lvl = LEVELS[curLevelIdx];
+  const n = countCards(program);
+  if(n===0 || n>lvl.budget) return;
+  running = true;
+  runBtn.disabled = true;
+  $("#clearBtn").disabled = true;
+  robotState = {x:lvl.start.x, y:lvl.start.y, dir:lvl.start.dir};
+  placeRobot(true);
+  updateStatus(0);
+  let steps = 0;
+  const ctx = { stopped:false, crashed:false, won:false };
+  const wallSet = new Set(lvl.walls.map(p=>cellKey(p.x,p.y)));
+  const hazSet = new Set(lvl.hazards.map(p=>cellKey(p.x,p.y)));
+
+  async function highlight(cardEl){
+    if(cardEl) cardEl.classList.add("running");
+    await sleep(260);
+    if(cardEl) cardEl.classList.remove("running");
+  }
+  function elFor(id){ return programEl.querySelector(`[data-id="${id}"]`); }
+
+  async function execList(list){
+    for(const card of list){
+      if(ctx.stopped) return;
+      await execCard(card);
+    }
+  }
+  async function execCard(card){
+    if(ctx.stopped) return;
+    const el = elFor(card.id);
+    if(card.type==="REPEAT"){
+      if(el) el.classList.add("running");
+      for(let i=0;i<card.count;i++){
+        if(ctx.stopped) break;
+        await execList(card.children);
+        await sleep(90);
+      }
+      if(el) el.classList.remove("running");
+      return;
+    }
+    await highlight(el);
+    if(ctx.stopped) return;
+    if(card.type==="LEFT"){ robotState.dir = (robotState.dir+3)%4; placeRobot(); }
+    else if(card.type==="RIGHT"){ robotState.dir = (robotState.dir+1)%4; placeRobot(); }
+    else if(card.type==="FWD"){
+      const [dx,dy] = DIRV[robotState.dir];
+      const nx = robotState.x+dx, ny = robotState.y+dy;
+      steps++;
+      if(nx<0||ny<0||nx>=lvl.w||ny>=lvl.h||wallSet.has(cellKey(nx,ny))){
+        ctx.crashed = true; ctx.stopped = true;
+        $("#robot").classList.add("crash");
+      } else if(hazSet.has(cellKey(nx,ny))){
+        robotState.x=nx; robotState.y=ny; placeRobot();
+        await sleep(260);
+        ctx.crashed = true; ctx.stopped = true;
+        $("#robot").classList.add("crash");
+      } else {
+        robotState.x=nx; robotState.y=ny; placeRobot();
+        if(nx===lvl.goal.x && ny===lvl.goal.y){ ctx.won = true; ctx.stopped = true; }
+      }
+      updateStatus(steps);
+    }
+    await sleep(90);
+  }
+
+  await execList(program);
+  await sleep(150);
+
+  if(ctx.won){
+    const best = progress.scores[curLevelIdx];
+    if(best===undefined || n<best) progress.scores[curLevelIdx] = n;
+    if(progress.unlocked < curLevelIdx+2) progress.unlocked = curLevelIdx+2;
+    saveProgress();
+    updateDots();
+    const isLast = curLevelIdx === LEVELS.length-1;
+    showOverlay("success", "✅ CIRCUIT COMPLETE — " + n + " card(s) used",
+      isLast ? "PLAY AGAIN" : "NEXT LEVEL ▶",
+      ()=>{ hideOverlay(); loadLevel(isLast ? curLevelIdx : curLevelIdx+1); });
+  } else if(ctx.crashed){
+    showOverlay("fail", "⚡ CRASH — the robot hit a wall or spark", "TRY AGAIN",
+      ()=>{ hideOverlay(); resetRun(); });
+  } else {
+    showOverlay("fail", "◇ PROGRAM ENDED — goal not reached", "TRY AGAIN",
+      ()=>{ hideOverlay(); resetRun(); });
+  }
+  running = false;
+  runBtn.disabled = countCards(program) > lvl.budget || countCards(program)===0;
+  $("#clearBtn").disabled = false;
+}
+
+function resetRun(){
+  const lvl = LEVELS[curLevelIdx];
+  robotState = {x:lvl.start.x, y:lvl.start.y, dir:lvl.start.dir};
+  placeRobot(true);
+  $("#robot").classList.remove("crash");
+  updateStatus(0);
+}
+
+runBtn.addEventListener("click", runProgram);
+
+// ---------- PERSISTENCE ----------
+async function loadProgress(){
+  try{
+    const res = await window.storage.get("progress");
+    if(res && res.value){
+      const parsed = JSON.parse(res.value);
+      if(parsed && typeof parsed.unlocked === "number") progress = parsed;
+    }
+  }catch(e){ /* no saved progress yet, or storage unavailable — start fresh */ }
+}
+async function saveProgress(){
+  try{ await window.storage.set("progress", JSON.stringify(progress)); }
+  catch(e){ /* ignore save errors, session state still works */ }
+}
+
+(async function init(){
+  await loadProgress();
+  const startAt = Math.min(progress.unlocked-1, LEVELS.length-1);
+  loadLevel(Math.max(0,startAt));
+})();
+</script>
+</body>
+</html>
